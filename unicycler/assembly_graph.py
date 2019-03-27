@@ -1215,6 +1215,7 @@ class AssemblyGraph(object):
         if verbosity > 1:
             bridge_application_table[0].append('Result')
         table_row_colours = {}
+        unused_criterion = 0
         for bridge in sorted_bridges:
 
             # Is the bridge available to be applied? The first criterion is simple: neither the
@@ -1253,6 +1254,12 @@ class AssemblyGraph(object):
                         if abs(bridge_using_this_segment.start_segment) in segs_in_path or \
                                         abs(bridge_using_this_segment.end_segment) in segs_in_path:
                             can_use_bridge = False
+                            unused_criterion = "2"
+                            # print("BAD bridge failed criterion 2 - two bridges ending inside each other")
+            else:
+                # TODO
+                # print("BAD bridge failed criterion 1 -already bridged: %s" % bridge)
+                unused_criterion = "1"
 
             start_to_end = (str(bridge.start_segment) + ' ' + get_right_arrow()).rjust(7) + ' ' + \
                 str(bridge.end_segment)
@@ -1274,7 +1281,7 @@ class AssemblyGraph(object):
                     bridge_application_table.append(bridge_application_table_row + ['rejected'])
             elif verbosity > 1:
                 table_row_colours[len(bridge_application_table)] = 'dim'
-                bridge_application_table.append(bridge_application_table_row + ['unused'])
+                bridge_application_table.append(bridge_application_table_row + ['unused-' + unused_criterion])
 
         print_table(bridge_application_table, alignments='LLLRR', indent=0,
                     sub_colour={'applied': 'green', 'rejected': 'clear_red'},

@@ -440,6 +440,7 @@ def create_long_read_bridges(graph, read_dict, read_names, anchor_segments, verb
             # directions implies multi-copy.
             opposite_num = -alignment.get_signed_ref_num()
             if opposite_num in set(x.get_signed_ref_num() for x in available_alignments):
+                print("alignment with opposite direction segment: %s " % alignment)
                 continue
 
             available_alignments.append(alignment)
