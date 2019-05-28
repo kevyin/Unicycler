@@ -3,31 +3,10 @@
 import argparse
 import os
 import sys
-import shutil
 import random
-import itertools
-import multiprocessing
 from .assembly_graph import AssemblyGraph
-from .assembly_graph_copy_depth import determine_copy_depth
-from .bridge_long_read_simple import create_simple_long_read_bridges
-from .miniasm_assembly import make_miniasm_string_graph
-from .bridge_miniasm import create_miniasm_bridges
-from .bridge_long_read import create_long_read_bridges
-from .bridge_spades_contig import create_spades_contig_bridges
-from .bridge_loop_unroll import create_loop_unrolling_bridges
-from .misc import int_to_str, float_to_str, quit_with_error, get_percentile, bold, \
-    check_input_files, MyHelpFormatter, print_table, get_ascii_art, \
-    get_default_thread_count, spades_path_and_version, makeblastdb_path_and_version, \
-    tblastn_path_and_version, bowtie2_build_path_and_version, bowtie2_path_and_version, \
-    samtools_path_and_version, java_path_and_version, pilon_path_and_version, \
-    racon_path_and_version, bcftools_path_and_version, gfa_path, red
-from .spades_func import get_best_spades_graph
-from .blast_func import find_start_gene, CannotFindStart
-from .read_ref import get_read_nickname_dict
-from .pilon_func import polish_with_pilon_multiple_rounds, CannotPolish
-from .vcf_func import make_vcf
+from .misc import bold, MyHelpFormatter
 from . import log
-from . import settings
 from .version import __version__
 
 
@@ -39,7 +18,6 @@ def main():
     # Fix the random seed so the program produces the same output every time it's run.
     random.seed(0)
 
-    full_command = ' '.join(('"' + x + '"' if ' ' in x else x) for x in sys.argv)
     args = get_arguments()
 
     if args.input_assembly:
@@ -70,7 +48,7 @@ def clean_up_spades_graph(graph):
     graph.normalise_read_depths()
     graph.renumber_segments()
     graph.sort_link_order()
-    
+
 
 def get_arguments():
     """
