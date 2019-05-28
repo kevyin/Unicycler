@@ -134,8 +134,9 @@ def trim_blunt_ends(self, to_trim):
         if -seg_num not in segment_edges:
             start_trim = to_trim
 
-        segment.trim_from_start(start_trim)
-        segment.trim_from_end(end_trim)
+        if segment.get_length() > start_trim + end_trim:
+            segment.trim_from_start(start_trim)
+            segment.trim_from_end(end_trim)
         log.log(str(seg_num).rjust(8) + str(start_trim).rjust(10) + str(end_trim).rjust(10), 3)
 
     log.log('Graph dead ends trimmed')
