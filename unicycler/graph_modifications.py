@@ -9,7 +9,6 @@ import subprocess
 from .assembly_graph import AssemblyGraph
 from .misc import bold, MyHelpFormatter
 from . import log
-from .version import __version__
 
 
 def main():
@@ -30,34 +29,11 @@ def main():
         graph.save_to_gfa(output_filename, save_copy_depth_info=False,
                           newline=True, include_insert_size=False)
 
-def clean_up_spades_graph(graph):
-    log.log_section_header('Cleaning graph')
-    log.log_explanation('Unicycler now performs various cleaning procedures on the graph to '
-                        'remove overlaps and simplify the graph structure. The end result is a '
-                        'graph ready for bridging.', verbosity=1)
-    graph.remove_all_overlaps()
-
-    while True:
-        graph.repair_multi_way_junctions()
-        graph.remove_unnecessary_links()
-        graph.expand_repeats()
-        if not graph.remove_zero_length_segs():
-            break
-    while True:
-        if not graph.merge_small_segments(5):
-            break
-
-    graph.normalise_read_depths()
-    graph.renumber_segments()
-    graph.sort_link_order()
-
 
 def get_arguments():
     """
     Parse the command line arguments.
     """
-    description = bold('graph modifications')
-    this_script_dir = os.path.dirname(os.path.realpath(__file__))
 
     if '--helpall' in sys.argv or '--allhelp' in sys.argv or '--all_help' in sys.argv:
         sys.argv.append('--help_all')
@@ -72,8 +48,6 @@ def get_arguments():
                             help='Show this help message and exit')
     help_group.add_argument('--help_all', action='help',
                             help='Show a help message with all program options')
-    help_group.add_argument('--version', action='version', version='Unicycler v' + __version__,
-                            help="Show Unicycler's version number")
 
     # input options
     input_group = parser.add_argument_group('Input')
@@ -230,6 +204,5 @@ def trim_blunt_ends(self, to_trim, makeblastdb_path='makeblastdb', blastn_path='
         else:
             end_trim = 0
         log.log(str(seg_num).rjust(8) + str(start_trim).rjust(10) + str(end_trim).rjust(10), 3)
-
 
     log.log('Graph dead ends trimmed')
