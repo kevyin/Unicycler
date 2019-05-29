@@ -4,6 +4,8 @@ import argparse
 import os
 import sys
 import random
+import tempfile
+import subprocess
 from .assembly_graph import AssemblyGraph
 from .misc import bold, MyHelpFormatter
 from . import log
@@ -26,7 +28,7 @@ def main():
 
         output_filename = args.out
         graph.save_to_gfa(output_filename, save_copy_depth_info=False,
-                          newline=True, include_insert_size=True)
+                          newline=True, include_insert_size=False)
 
 def clean_up_spades_graph(graph):
     log.log_section_header('Cleaning graph')
@@ -80,6 +82,13 @@ def get_arguments():
     input_group.add_argument('--overlap', required=False,
                              help='overlap size, default: None - guess from gfa link)', type=int, default=None)
 
+    input_group.add_argument('--makeblastdb_path', type=str, default='makeblastdb',
+                                help='Path to the makeblastdb executable'
+                                if show_all_args else argparse.SUPPRESS)
+    input_group.add_argument('--blastn_path', type=str, default='blastn',
+                                help='Path to the blastn executable'
+                                if show_all_args else argparse.SUPPRESS)
+
     # Output options
     output_group = parser.add_argument_group('Output')
     output_group.add_argument('-o', '--out', required=True,
@@ -103,40 +112,125 @@ def get_arguments():
     return args
 
 
-def trim_blunt_ends(self, to_trim):
+def make_blast_db(edges, segments, makeblastdb_path, take=None):
+
+    fa_file = tempfile.mktemp(prefix="segments_", suffix=".fa")
+    db_file = fa_file + '.db'
+
+    with open(fa_file, 'w') as f:
+        for seg_num in edges:
+            seq = get_segment(seg_num, segments)
+            if take:
+                seq = seq[:take]
+            f.write('>%s\n%s\n' % (seg_num,seq))
+
+    command = [makeblastdb_path, '-dbtype', 'nucl', '-in', fa_file, '-out', db_file]
+    log.log('  ' + ' '.join(command), 2)
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    _, err = process.communicate()
+    if err:
+        log.log('\nmakeblastdb encountered an error:\n' + err.decode())
+        raise err
+
+    return db_file
+
+
+class BlastHit(object):
+
+    def __init__(self, blast_line):
+        self.qseqid = ''
+        self.pident, self.length, self.bitscore  = 0, 0, 0
+        self.flip = False
+
+        parts = blast_line.strip().split('\t')
+        if len(parts) > 7:
+            self.qseqid = parts[0]
+            self.pident = float(parts[3])
+            self.qstart = int(parts[6]) - 1
+            self.bitscore = float(parts[7])
+            self.length = float(parts[4])
+
+    def __repr__(self):
+        return 'BLAST hit: query=' + self.qseqid + ', ID=' + \
+               str(self.pident) + ', length=' + str(self.length) + ', bitscore=' + \
+               str(self.bitscore)
+
+
+def search_blastn(blastdb, query_fa, blastn_path, num_alignments=1):
+
+    command = [blastn_path, '-db', blastdb, '-query', query_fa, '-num_alignments', str(num_alignments), '-outfmt',
+               '6 qseqid sstart send pident length qseq qstart bitscore', '-num_threads', '1']
+    log.log('  ' + ' '.join(command), 2)
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    blast_out, blast_err = process.communicate()
+    process.wait()
+    if blast_err:
+        log.log('\nBLAST encountered an error:\n' + blast_err.decode())
+
+    hits = []
+
+    for line in blast_out.decode().splitlines():
+        print(line)
+        hit = BlastHit(line)
+        hits.append(hit)
+    return hits
+
+
+def get_segment(seg_num, segments):
+    return segments[seg_num].forward_sequence if seg_num > 0 else segments[-seg_num].reverse_sequence
+
+
+def trim_blunt_ends(self, to_trim, makeblastdb_path='makeblastdb', blastn_path='blastn'):
     """
     This function trims overlaps at blunt ends which would normally not be removed. It assumes that
     all overlaps in the graph are the same size.
     """
-    if self.overlap == 0:
-        log.log('Graph has no overlaps - overlap removal not needed')
-        return
 
     # take note of all edges which start or end at a segment
     segment_edges = set()
     for start, ends in self.forward_links.items():
-        segment_edges.add(start)
+        segment_edges.add(-start)
         for end in ends:
-            segment_edges.add(-end)
+            segment_edges.add(end)
 
+    # make the non-dead-end edge database
+    db = make_blast_db(segment_edges, self.segments, makeblastdb_path, take=self.overlap)
 
-    # Now we finally do the segment trimming!
+    # prepare to search each dead end candidate against the db.
+    query_fa = tempfile.mktemp(".fa", "query_de_candidates_")
+    with open(query_fa, 'w') as f:
+        for seg_num, segment in self.segments.items():
+            # dead ends don't have any edges going in or out of them
+            if seg_num not in segment_edges:
+                seq = get_segment(seg_num, self.segments)
+                f.write('>%s\n%s\n' % (seg_num, seq[:self.overlap]))
+            if -seg_num not in segment_edges:
+                seq = get_segment(-seg_num, self.segments)
+                f.write('>%s\n%s\n' % (-seg_num, seq[:self.overlap]))
+
+    hits = filter(lambda x: x.pident == 100, search_blastn(db, query_fa, blastn_path))
+
     log.log('\nRemoving graph overlaps\n', 3)
     log.log('             Bases     Bases', 3)
     log.log('           trimmed   trimmed', 3)
     log.log(' Segment      from      from', 3)
     log.log('  number     start       end', 3)
-    for seg_num, segment in self.segments.items():
-        start_trim = 0
-        end_trim = 0
-        if seg_num not in segment_edges:
-            end_trim = to_trim
-        if -seg_num not in segment_edges:
-            start_trim = to_trim
-
-        if segment.get_length() > start_trim + end_trim:
+    for h in hits:
+        # print(h)
+        seg_num = int(h.qseqid)
+        segment = self.segments[seg_num] if seg_num > 0 else self.segments[-seg_num]
+        start_trim = int(h.length) if seg_num > 0 else 0
+        end_trim = int(h.length) if seg_num < 0 else 0
+        # trim
+        if segment.get_length() - start_trim > self.overlap:
             segment.trim_from_start(start_trim)
+        else:
+            start_trim = 0
+        if segment.get_length() - end_trim > self.overlap:
             segment.trim_from_end(end_trim)
+        else:
+            end_trim = 0
         log.log(str(seg_num).rjust(8) + str(start_trim).rjust(10) + str(end_trim).rjust(10), 3)
+
 
     log.log('Graph dead ends trimmed')
