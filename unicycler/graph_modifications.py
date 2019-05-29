@@ -23,7 +23,7 @@ def main():
 
     if args.input_assembly:
         graph = AssemblyGraph(args.input_assembly, args.overlap)
-        trim_blunt_ends(graph, graph.overlap, num_threads=args.num_threads)
+        trim_blunt_ends(graph, graph.overlap, num_threads=args.threads)
 
         output_filename = args.out
         graph.save_to_gfa(output_filename, save_copy_depth_info=False,
