@@ -170,7 +170,6 @@ def search_blastn(blastdb, query_fa, blastn_path, num_alignments=1):
     hits = []
 
     for line in blast_out.decode().splitlines():
-        print(line)
         hit = BlastHit(line)
         hits.append(hit)
     return hits
