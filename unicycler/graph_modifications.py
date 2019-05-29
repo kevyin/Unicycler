@@ -63,7 +63,7 @@ def get_arguments():
                                 help='Path to the blastn executable'
                                 if show_all_args else argparse.SUPPRESS)
     input_group.add_argument('-t', '--threads', type=int, required=False,
-                             default=get_default_thread_count(),
+                             default=8,
                              help='Number of threads used')
 
     # Output options

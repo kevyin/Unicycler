@@ -53,6 +53,7 @@ def main():
     """
     Script execution starts here.
     """
+
     # Fix the random seed so the program produces the same output every time it's run.
     random.seed(0)
 
@@ -291,7 +292,7 @@ def get_arguments():
 
     other_group = parser.add_argument_group('Other')
     other_group.add_argument('-t', '--threads', type=int, required=False,
-                             default=4,
+                             default=get_default_thread_count(),
                              help='Number of threads used')
     other_group.add_argument('--mode', choices=['conservative', 'normal', 'bold'], default='normal',
                              help='B|Bridging mode (default: normal)\n'
