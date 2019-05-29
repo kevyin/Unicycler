@@ -23,7 +23,7 @@ def main():
 
     if args.input_assembly:
         graph = AssemblyGraph(args.input_assembly, args.overlap)
-        trim_blunt_ends(graph, graph.overlap)
+        trim_blunt_ends(graph, graph.overlap, num_threads=args.num_threads)
 
         output_filename = args.out
         graph.save_to_gfa(output_filename, save_copy_depth_info=False,
@@ -62,6 +62,9 @@ def get_arguments():
     input_group.add_argument('--blastn_path', type=str, default='blastn',
                                 help='Path to the blastn executable'
                                 if show_all_args else argparse.SUPPRESS)
+    input_group.add_argument('-t', '--threads', type=int, required=False,
+                             default=get_default_thread_count(),
+                             help='Number of threads used')
 
     # Output options
     output_group = parser.add_argument_group('Output')
@@ -130,10 +133,10 @@ class BlastHit(object):
                str(self.bitscore)
 
 
-def search_blastn(blastdb, query_fa, blastn_path, num_alignments=1):
+def search_blastn(blastdb, query_fa, blastn_path, num_alignments=1, num_threads=8):
 
     command = [blastn_path, '-db', blastdb, '-query', query_fa, '-num_alignments', str(num_alignments), '-outfmt',
-               '6 qseqid sstart send pident length qseq qstart bitscore', '-num_threads', '1']
+               '6 qseqid sstart send pident length qseq qstart bitscore', '-num_threads', str(num_threads)]
     log.log('  ' + ' '.join(command), 2)
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     blast_out, blast_err = process.communicate()
@@ -153,7 +156,7 @@ def get_segment(seg_num, segments):
     return segments[seg_num].forward_sequence if seg_num > 0 else segments[-seg_num].reverse_sequence
 
 
-def trim_blunt_ends(self, to_trim, makeblastdb_path='makeblastdb', blastn_path='blastn'):
+def trim_blunt_ends(self, to_trim, makeblastdb_path='makeblastdb', blastn_path='blastn', num_threads=8):
     """
     This function trims overlaps at blunt ends which would normally not be removed. It assumes that
     all overlaps in the graph are the same size.
@@ -181,7 +184,7 @@ def trim_blunt_ends(self, to_trim, makeblastdb_path='makeblastdb', blastn_path='
                 seq = get_segment(-seg_num, self.segments)
                 f.write('>%s\n%s\n' % (-seg_num, seq[:self.overlap]))
 
-    hits = filter(lambda x: x.pident == 100, search_blastn(db, query_fa, blastn_path))
+    hits = filter(lambda x: x.pident == 100, search_blastn(db, query_fa, blastn_path, num_threads=num_threads))
 
     log.log('\nRemoving graph overlaps\n', 3)
     log.log('             Bases     Bases', 3)

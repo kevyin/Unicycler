@@ -291,7 +291,7 @@ def get_arguments():
 
     other_group = parser.add_argument_group('Other')
     other_group.add_argument('-t', '--threads', type=int, required=False,
-                             default=get_default_thread_count(),
+                             default=4,
                              help='Number of threads used')
     other_group.add_argument('--mode', choices=['conservative', 'normal', 'bold'], default='normal',
                              help='B|Bridging mode (default: normal)\n'
